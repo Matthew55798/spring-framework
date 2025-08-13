@@ -140,8 +140,10 @@ class XmlBeanFactoryTests {
 	@Test
 	void refToSeparatePrototypeInstances() {
 		DefaultListableBeanFactory xbf = new DefaultListableBeanFactory();
+		//资源定位
 		XmlBeanDefinitionReader reader = new XmlBeanDefinitionReader(xbf);
 		reader.setValidationMode(XmlBeanDefinitionReader.VALIDATION_NONE);
+		//资源加载
 		reader.loadBeanDefinitions(REFTYPES_CONTEXT);
 
 		TestBean emma = (TestBean) xbf.getBean("emma");
