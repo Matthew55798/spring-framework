@@ -17,9 +17,15 @@
 package org.springframework.core.retry;
 
 import java.io.Serial;
+import java.util.Objects;
 
 /**
  * Exception thrown when a {@link RetryPolicy} has been exhausted.
+ *
+ * <p>A {@code RetryException} will contain the last exception thrown by the
+ * {@link Retryable} operation as the {@linkplain #getCause() cause} and any
+ * exceptions from previous attempts as {@linkplain #getSuppressed() suppressed
+ * exceptions}.
  *
  * @author Mahmoud Ben Hassine
  * @since 7.0
@@ -32,20 +38,21 @@ public class RetryException extends Exception {
 
 
 	/**
-	 * Create a new {@code RetryException} for the supplied message.
-	 * @param message the detail message
-	 */
-	public RetryException(String message) {
-		super(message);
-	}
-
-	/**
 	 * Create a new {@code RetryException} for the supplied message and cause.
 	 * @param message the detail message
-	 * @param cause the root cause
+	 * @param cause the last exception thrown by the {@link Retryable} operation
 	 */
 	public RetryException(String message, Throwable cause) {
-		super(message, cause);
+		super(message, Objects.requireNonNull(cause, "cause must not be null"));
+	}
+
+
+	/**
+	 * Get the last exception thrown by the {@link Retryable} operation.
+	 */
+	@Override
+	public final synchronized Throwable getCause() {
+		return Objects.requireNonNull(super.getCause());
 	}
 
 }
