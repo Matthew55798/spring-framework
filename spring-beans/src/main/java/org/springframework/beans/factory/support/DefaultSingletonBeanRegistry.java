@@ -16,31 +16,19 @@
 
 package org.springframework.beans.factory.support;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.*;
+import org.springframework.beans.factory.config.SingletonBeanRegistry;
+import org.springframework.core.SimpleAliasRegistry;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
-
-import org.jspecify.annotations.Nullable;
-
-import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.BeanCreationNotAllowedException;
-import org.springframework.beans.factory.BeanCurrentlyInCreationException;
-import org.springframework.beans.factory.DisposableBean;
-import org.springframework.beans.factory.ObjectFactory;
-import org.springframework.beans.factory.config.SingletonBeanRegistry;
-import org.springframework.core.SimpleAliasRegistry;
-import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
 
 /**
  * Generic registry for shared bean instances, implementing the
@@ -182,6 +170,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	protected void addSingletonFactory(String beanName, ObjectFactory<?> singletonFactory) {
 		Assert.notNull(singletonFactory, "Singleton factory must not be null");
+		// 加三缓，清二缓
 		this.singletonFactories.put(beanName, singletonFactory);
 		this.earlySingletonObjects.remove(beanName);
 		this.registeredSingletons.add(beanName);
@@ -207,8 +196,11 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	protected @Nullable Object getSingleton(String beanName, boolean allowEarlyReference) {
 		// Quick check for existing instance without full singleton lock.
+		//先尝试从一级缓存中湖区
 		Object singletonObject = this.singletonObjects.get(beanName);
+		//没获取到，判断是否是在初始化的过程中
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			//去二级缓存中获取
 			singletonObject = this.earlySingletonObjects.get(beanName);
 			if (singletonObject == null && allowEarlyReference) {
 				if (!this.singletonLock.tryLock()) {
@@ -220,6 +212,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					singletonObject = this.singletonObjects.get(beanName);
 					if (singletonObject == null) {
 						singletonObject = this.earlySingletonObjects.get(beanName);
+						//二级缓存也没有 去三级缓存中获取
 						if (singletonObject == null) {
 							ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
 							if (singletonFactory != null) {

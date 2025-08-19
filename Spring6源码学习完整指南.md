@@ -99,6 +99,115 @@ cd spring-framework
 #### 核心测试用例
 [DefaultListableBeanFactoryTests.java](spring-beans/src/test/java/org/springframework/beans/factory/DefaultListableBeanFactoryTests.java)
 
+#### BeanDefinition 体系详解
+
+Spring中的BeanDefinition是描述Bean配置信息的核心接口，有多种实现类，每种都有特定的用途：
+
+##### 1. BeanDefinition 继承体系
+```
+BeanDefinition (接口)
+├── AbstractBeanDefinition (抽象基类)
+│   ├── RootBeanDefinition (根Bean定义)
+│   ├── ChildBeanDefinition (子Bean定义)
+│   └── GenericBeanDefinition (通用Bean定义)
+└── AnnotatedBeanDefinition (注解Bean定义接口)
+    ├── AnnotatedGenericBeanDefinition (注解通用Bean定义)
+    └── ScannedGenericBeanDefinition (扫描通用Bean定义)
+```
+
+##### 2. 各种BeanDefinition的作用和区别
+
+###### **RootBeanDefinition (根Bean定义)**
+- **用途**: 表示运行时合并后的Bean定义，是最终的、统一的Bean定义视图
+- **特点**: 
+  - 没有父Bean定义，是独立的
+  - 包含完整的Bean配置信息
+  - 支持工厂方法和实例提供者
+  - 适合程序化配置
+- **使用场景**:
+  - `@Bean`方法生成的Bean定义
+  - 工厂方法创建的Bean
+  - 程序化注册的Bean
+
+###### **ChildBeanDefinition (子Bean定义)**
+- **用途**: 继承父Bean定义的配置，可以覆盖或添加新的配置
+- **特点**:
+  - 必须有父Bean定义
+  - 继承父Bean的构造函数参数、属性值、方法重写
+  - 可以覆盖初始化方法、销毁方法、静态工厂方法
+  - 依赖、自动装配模式、作用域等设置来自子定义
+- **使用场景**:
+  - XML配置中的父子Bean关系
+  - 需要继承父Bean配置的场景
+
+###### **GenericBeanDefinition (通用Bean定义)**
+- **用途**: 声明式Bean定义的一站式解决方案
+- **特点**:
+  - 支持动态设置父Bean名称
+  - 灵活性最高，可以动态改变父Bean关系
+  - 适合XML配置和Bean后处理器操作
+  - Spring 2.5+推荐使用
+- **使用场景**:
+  - XML配置文件中的Bean定义
+  - 需要动态调整父Bean关系的场景
+
+###### **AnnotatedBeanDefinition (注解Bean定义)**
+- **用途**: 支持注解元数据的Bean定义
+- **特点**:
+  - 暴露注解元数据，无需加载类
+  - 支持工厂方法元数据
+  - 用于注解驱动的配置
+- **实现类**:
+  - `AnnotatedGenericBeanDefinition`: 通用注解Bean定义
+  - `ScannedGenericBeanDefinition`: 扫描得到的注解Bean定义
+
+##### 4. BeanDefinition在Spring Boot中的应用
+
+在Spring Boot中，BeanDefinition的使用更加自动化：
+
+- **@Component扫描**: 自动创建`ScannedGenericBeanDefinition`
+- **@Bean方法**: 自动创建`ConfigurationClassBeanDefinition`(继承自`RootBeanDefinition`)
+- **@Configuration**: 使用`ConfigurationClassBeanDefinition`
+- **自动配置**: 使用`GenericBeanDefinition`进行动态配置
+
+##### 5. 实际项目中的选择建议
+
+- **XML配置**: 使用`GenericBeanDefinition`
+- **注解配置**: 使用`AnnotatedGenericBeanDefinition`
+- **程序化配置**: 使用`RootBeanDefinition`
+- **需要继承**: 使用`ChildBeanDefinition`或`GenericBeanDefinition`
+- **Spring Boot**: 主要使用自动生成的Bean定义
+
+##### 6. BeanDefinition的核心属性
+
+每个BeanDefinition都包含以下核心属性：
+
+```java
+// 基本信息
+String getBeanClassName();           // Bean的类名
+Class<?> getBeanClass();            // Bean的Class对象
+String getScope();                  // 作用域 (singleton/prototype)
+boolean isSingleton();              // 是否单例
+boolean isPrototype();              // 是否原型
+
+// 依赖关系
+String[] getDependsOn();            // 依赖的Bean名称
+String getParentName();             // 父Bean名称
+
+// 生命周期
+String getInitMethodName();         // 初始化方法名
+String getDestroyMethodName();      // 销毁方法名
+boolean isLazyInit();               // 是否懒加载
+
+// 配置信息
+ConstructorArgumentValues getConstructorArgumentValues();  // 构造函数参数
+MutablePropertyValues getPropertyValues();                // 属性值
+MethodOverrides getMethodOverrides();                     // 方法重写
+
+// 自动装配
+int getAutowireMode();              // 自动装配模式
+boolean isAutowireCandidate();      // 是否作为自动装配候选
+```
 #### 重点测试方法
 1. **简单引用测试**
    ```java
@@ -175,34 +284,6 @@ cd spring-framework
    }
    ```
 
-2. **配置类注册测试**
-   ```java
-   @Test
-   void registerAndRefresh() {
-       AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
-       context.register(Config.class, NameConfig.class);
-       context.refresh();
-       
-       context.getBean("testBean");
-       assertThat(context.getBean("name")).isEqualTo("foo");
-       assertThat(context.getBean("prefixName")).isEqualTo("barfoo");
-       Map<String, Object> beans = context.getBeansWithAnnotation(Configuration.class);
-       assertThat(beans).hasSize(2);
-   }
-   ```
-
-#### 学习步骤
-1. 运行 `scanAndRefresh()` 测试
-2. 在 [AbstractApplicationContext.refresh()](spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java) 设置断点
-3. 跟踪上下文启动流程
-4. 理解Bean定义加载过程
-
-#### 关键源码位置
-- [AbstractApplicationContext.refresh()](spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java)
-- [AbstractApplicationContext.obtainFreshBeanFactory()](spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java)
-- [AbstractApplicationContext.invokeBeanFactoryPostProcessors()](spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java)
-- [AbstractApplicationContext.registerBeanPostProcessors()](spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java)
-
 ### 1.3 Bean生命周期管理
 
 #### 核心测试用例
@@ -224,43 +305,131 @@ cd spring-framework
        // 测试Bean后处理器机制
    }
    ```
-
-#### 生命周期关键方法
-1. **实例化阶段**
-   - [createBeanInstance()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 创建Bean实例
-   - [instantiateBean()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 实例化Bean
-
-2. **属性注入阶段**
-   - [populateBean()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 填充Bean属性
-   - [applyPropertyValues()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 应用属性值
-
-3. **初始化阶段**
-   - [initializeBean()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 初始化Bean
-   - [invokeInitMethods()](spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractAutowireCapableBeanFactory.java) - 调用初始化方法
+   
+#### 生命周期总结
 
 ## 第二阶段：依赖注入机制 (第3-4周)
 
 ### 2.1 自动装配
 
 #### 核心测试用例
-[AutowiredAnnotationBeanPostProcessorTests.java](spring-beans/src/test/java/org/springframework/beans/factory/wiring/AutowiredAnnotationBeanPostProcessorTests.java)
+[AutowiredAnnotationBeanPostProcessorTests.java](spring-beans/src/test/java/org/springframework/beans/factory/annotation/AutowiredAnnotationBeanPostProcessorTests.java)
 
 #### 重点测试方法
 1. **字段注入测试**
    ```java
    @Test
-   void testAutowiredField() {
-       // 测试@Autowired字段注入
+   void resourceInjection() {
+       RootBeanDefinition bd = new RootBeanDefinition(ResourceInjectionBean.class);
+       bd.setScope(BeanDefinition.SCOPE_PROTOTYPE);
+       bf.registerBeanDefinition("annotatedBean", bd);
+       TestBean tb = new TestBean();
+       bf.registerSingleton("testBean", tb);
+
+       ResourceInjectionBean bean = bf.getBean("annotatedBean", ResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+
+       bean = bf.getBean("annotatedBean", ResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+
+       assertThat(bf.getDependenciesForBean("annotatedBean")).isEqualTo(new String[] {"testBean"});
    }
    ```
 
 2. **构造器注入测试**
    ```java
    @Test
-   void testAutowiredConstructor() {
-       // 测试构造器注入
+   void extendedResourceInjection() {
+       RootBeanDefinition bd = new RootBeanDefinition(TypedExtendedResourceInjectionBean.class);
+       bd.setScope(BeanDefinition.SCOPE_PROTOTYPE);
+       bf.registerBeanDefinition("annotatedBean", bd);
+       TestBean tb = new TestBean();
+       bf.registerSingleton("testBean", tb);
+       NestedTestBean ntb = new NestedTestBean();
+       bf.registerSingleton("nestedTestBean", ntb);
+
+       TypedExtendedResourceInjectionBean bean = bf.getBean("annotatedBean", TypedExtendedResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+       assertThat(bean.getTestBean3()).isSameAs(tb);
+       assertThat(bean.getTestBean4()).isSameAs(tb);
+       assertThat(bean.getNestedTestBean()).isSameAs(ntb);
+       assertThat(bean.getBeanFactory()).isSameAs(bf);
+
+       bean = bf.getBean("annotatedBean", TypedExtendedResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+       assertThat(bean.getTestBean3()).isSameAs(tb);
+       assertThat(bean.getTestBean4()).isSameAs(tb);
+       assertThat(bean.getNestedTestBean()).isSameAs(ntb);
+       assertThat(bean.getBeanFactory()).isSameAs(bf);
+
+       assertThat(bf.getDependenciesForBean("annotatedBean")).isEqualTo(new String[] {"testBean", "nestedTestBean"});
    }
    ```
+
+3. **可选依赖注入测试**
+   ```java
+   @Test
+   void optionalResourceInjection() {
+       bf.registerBeanDefinition("annotatedBean", new RootBeanDefinition(OptionalResourceInjectionBean.class));
+       TestBean tb = new TestBean();
+       bf.registerSingleton("testBean", tb);
+       NestedTestBean ntb = new NestedTestBean();
+       bf.registerSingleton("nestedTestBean", ntb);
+
+       OptionalResourceInjectionBean bean = bf.getBean("annotatedBean", OptionalResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+       assertThat(bean.getTestBean3()).isSameAs(tb);
+       assertThat(bean.getNestedTestBean()).isSameAs(ntb);
+       assertThat(bean.getBeanFactory()).isSameAs(bf);
+
+       bean = bf.getBean("annotatedBean", OptionalResourceInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(tb);
+       assertThat(bean.getTestBean2()).isSameAs(tb);
+       assertThat(bean.getTestBean3()).isSameAs(tb);
+       assertThat(bean.getNestedTestBean()).isSameAs(ntb);
+       assertThat(bean.getBeanFactory()).isSameAs(bf);
+
+       assertThat(bf.getDependenciesForBean("annotatedBean")).isEqualTo(new String[] {"testBean", "nestedTestBean"});
+   }
+   ```
+
+4. **ObjectProvider注入测试**
+   ```java
+   @Test
+   void objectProviderInjectionWithSingletonTarget() {
+       bf.registerBeanDefinition("annotatedBean", new RootBeanDefinition(ObjectProviderInjectionBean.class));
+       bf.registerBeanDefinition("testBean", new RootBeanDefinition(TestBean.class));
+
+       ObjectProviderInjectionBean bean = bf.getBean("annotatedBean", ObjectProviderInjectionBean.class);
+       assertThat(bean.getTestBean()).isSameAs(bf.getBean("testBean"));
+       assertThat(bean.getOptionalTestBean()).isSameAs(bf.getBean("testBean"));
+       assertThat(bean.getOptionalTestBeanWithDefault()).isSameAs(bf.getBean("testBean"));
+       assertThat(bean.consumeOptionalTestBean()).isEqualTo(bf.getBean("testBean"));
+       assertThat(bean.getUniqueTestBean()).isSameAs(bf.getBean("testBean"));
+       assertThat(bean.getUniqueTestBeanWithDefault()).isSameAs(bf.getBean("testBean"));
+       assertThat(bean.consumeUniqueTestBean()).isEqualTo(bf.getBean("testBean"));
+
+       List<TestBean> testBeans = bean.iterateTestBeans();
+       assertThat(testBeans).hasSize(1);
+       assertThat(testBeans).contains(bf.getBean("testBean", TestBean.class));
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `resourceInjection()` 测试，理解字段注入机制
+2. 运行 `extendedResourceInjection()` 测试，理解构造器注入
+3. 运行 `optionalResourceInjection()` 测试，理解可选依赖
+4. 运行 `objectProviderInjectionWithSingletonTarget()` 测试，理解ObjectProvider注入
+
+#### 关键源码位置
+- [AutowiredAnnotationBeanPostProcessor.postProcessProperties()](spring-beans/src/main/java/org/springframework/beans/factory/annotation/AutowiredAnnotationBeanPostProcessor.java)
+- [AutowiredAnnotationBeanPostProcessor.findInjectionMetadata()](spring-beans/src/main/java/org/springframework/beans/factory/annotation/AutowiredAnnotationBeanPostProcessor.java)
+- [InjectionMetadata.inject()](spring-beans/src/main/java/org/springframework/beans/factory/annotation/InjectionMetadata.java)
 
 ### 2.2 循环依赖解决
 
@@ -302,25 +471,72 @@ void extensiveCircularReference() {
 ### 2.3 类型转换和属性编辑器
 
 #### 核心测试用例
-- [ConversionService测试](spring-core/src/test/java/org/springframework/core/convert/)
-- [PropertyEditor测试](spring-beans/src/test/java/org/springframework/beans/propertyeditors/)
+- [DefaultConversionServiceTests.java](spring-core/src/test/java/org/springframework/core/convert/converter/DefaultConversionServiceTests.java)
+- [CustomEditorTests.java](spring-beans/src/test/java/org/springframework/beans/propertyeditors/CustomEditorTests.java)
 
 #### 重点测试方法
-1. **类型转换测试**
+1. **基础类型转换测试**
    ```java
    @Test
-   void testTypeConversion() {
-       // 测试类型转换机制
+   void stringToCharacter() {
+       assertThat(conversionService.convert("1", Character.class)).isEqualTo(Character.valueOf('1'));
+   }
+
+   @Test
+   void stringToCharacterEmptyString() {
+       assertThat(conversionService.convert("", Character.class)).isNull();
+   }
+
+   @Test
+   void stringToCharacterInvalidString() {
+       assertThatExceptionOfType(ConversionFailedException.class).isThrownBy(() ->
+               conversionService.convert("invalid", Character.class));
    }
    ```
 
-2. **属性编辑器测试**
+2. **集合类型转换测试**
    ```java
    @Test
-   void testPropertyEditor() {
-       // 测试属性编辑器
+   void stringToCollection() {
+       String source = "1,2,3,4,5";
+       List<Integer> result = conversionService.convert(source, 
+           TypeDescriptor.valueOf(String.class), 
+           TypeDescriptor.collection(List.class, TypeDescriptor.valueOf(Integer.class)));
+       assertThat(result).containsExactly(1, 2, 3, 4, 5);
    }
    ```
+
+3. **自定义属性编辑器测试**
+   ```java
+   @Test
+   void testCustomEditor() {
+       DefaultListableBeanFactory bf = new DefaultListableBeanFactory();
+       bf.registerCustomEditor(TestBean.class, "name", new PropertyEditorSupport() {
+           @Override
+           public void setAsText(String text) {
+               setValue(new TestBean(text.toUpperCase()));
+           }
+       });
+       
+       TestBean tb = new TestBean();
+       bf.registerSingleton("testBean", tb);
+       
+       // 测试自定义编辑器
+       PropertyValues pvs = new MutablePropertyValues();
+       pvs.add("name", "test");
+       bf.findPropertyEditor(TestBean.class, "name").setAsText("test");
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `stringToCharacter()` 测试，理解基础类型转换
+2. 运行 `stringToCollection()` 测试，理解集合类型转换
+3. 运行 `testCustomEditor()` 测试，理解自定义属性编辑器
+
+#### 关键源码位置
+- [DefaultConversionService.convert()](spring-core/src/main/java/org/springframework/core/convert/support/DefaultConversionService.java)
+- [PropertyEditorRegistry.registerCustomEditor()](spring-beans/src/main/java/org/springframework/beans/PropertyEditorRegistry.java)
+- [BeanWrapperImpl.setPropertyValue()](spring-beans/src/main/java/org/springframework/beans/BeanWrapperImpl.java)
 
 ## 第三阶段：AOP实现原理 (第5-6周)
 
@@ -330,19 +546,66 @@ void extensiveCircularReference() {
 [ProxyFactoryTests.java](spring-aop/src/test/java/org/springframework/aop/framework/ProxyFactoryTests.java)
 
 #### 重点测试方法
-1. **JDK动态代理测试**
+1. **代理工厂基础测试**
    ```java
    @Test
-   void testJdkProxy() {
-       // 测试JDK动态代理创建
+   void indexOfMethods() {
+       TestBean target = new TestBean();
+       ProxyFactory pf = new ProxyFactory(target);
+       NopInterceptor nop = new NopInterceptor();
+       Advisor advisor = new DefaultPointcutAdvisor(new CountingBeforeAdvice());
+       Advised advised = (Advised) pf.getProxy();
+       // Can use advised and ProxyFactory interchangeably
+       advised.addAdvice(nop);
+       pf.addAdvisor(advisor);
+       assertThat(pf.indexOf(new NopInterceptor())).isEqualTo(-1);
+       assertThat(pf.indexOf(nop)).isEqualTo(0);
+       assertThat(pf.indexOf(advisor)).isEqualTo(1);
+       assertThat(advised.indexOf(new DefaultPointcutAdvisor(null))).isEqualTo(-1);
    }
    ```
 
-2. **CGLIB代理测试**
+2. **通知器移除测试**
    ```java
    @Test
-   void testCglibProxy() {
-       // 测试CGLIB代理创建
+   void removeAdvisorByReference() {
+       TestBean target = new TestBean();
+       ProxyFactory pf = new ProxyFactory(target);
+       NopInterceptor nop = new NopInterceptor();
+       CountingBeforeAdvice cba = new CountingBeforeAdvice();
+       Advisor advisor = new DefaultPointcutAdvisor(cba);
+       pf.addAdvice(nop);
+       pf.addAdvisor(advisor);
+       ITestBean proxied = (ITestBean) pf.getProxy();
+       proxied.setAge(5);
+       assertThat(cba.getCalls()).isEqualTo(1);
+       assertThat(nop.getCount()).isEqualTo(1);
+       assertThat(pf.removeAdvisor(advisor)).isTrue();
+       assertThat(proxied.getAge()).isEqualTo(5);
+       assertThat(cba.getCalls()).isEqualTo(1);
+       assertThat(nop.getCount()).isEqualTo(2);
+       assertThat(pf.removeAdvisor(new DefaultPointcutAdvisor(null))).isFalse();
+   }
+   ```
+
+3. **引入通知测试**
+   ```java
+   @Test
+   void introductionInterceptor() {
+       TestBean target = new TestBean();
+       ProxyFactory pf = new ProxyFactory(target);
+       pf.setInterfaces(ITestBean.class, IOther.class);
+       long t = 555555L;
+       TimestampIntroductionInterceptor ti = new TimestampIntroductionInterceptor(t);
+       pf.addAdvisor(new DefaultIntroductionAdvisor(ti, TimeStamped.class));
+
+       Class<?>[] newProxiedInterfaces = pf.getProxiedInterfaces();
+       assertThat(newProxiedInterfaces).as("Advisor proxies one more interface after introduction").hasSize(oldProxiedInterfaces.length + 1);
+
+       TimeStamped ts = (TimeStamped) pf.getProxy();
+       assertThat(ts.getTimeStamp()).isEqualTo(t);
+       // Shouldn't fail;
+       ((IOther) ts).absquatulate();
    }
    ```
 
@@ -367,62 +630,217 @@ public AopProxy createAopProxy(AdvisedSupport config) throws AopConfigException 
 }
 ```
 
+#### 学习步骤
+1. 运行 `indexOfMethods()` 测试，理解代理工厂的基本操作
+2. 运行 `removeAdvisorByReference()` 测试，理解通知器的管理
+3. 运行 `introductionInterceptor()` 测试，理解引入通知机制
+
+#### 关键源码位置
+- [ProxyFactory.getProxy()](spring-aop/src/main/java/org/springframework/aop/framework/ProxyFactory.java)
+- [DefaultAopProxyFactory.createAopProxy()](spring-aop/src/main/java/org/springframework/aop/framework/DefaultAopProxyFactory.java)
+- [JdkDynamicAopProxy.invoke()](spring-aop/src/main/java/org/springframework/aop/framework/JdkDynamicAopProxy.java)
+
 ### 3.2 切面织入
 
 #### 核心测试用例
 [AspectJExpressionPointcutTests.java](spring-aop/src/test/java/org/springframework/aop/aspectj/AspectJExpressionPointcutTests.java)
 
 #### 重点测试方法
-```java
-@Test
-void testMatches() {
-    AspectJExpressionPointcut pointcut = new AspectJExpressionPointcut();
-    pointcut.setExpression("execution(* org.springframework.beans.testfixture.beans.TestBean.*(..))");
-    
-    assertThat(pointcut.matches(TestBean.class.getMethod("getAge"), TestBean.class)).isTrue();
-}
-```
+1. **精确匹配测试**
+   ```java
+   @Test
+   void testMatchExplicit() {
+       String expression = "execution(int org.springframework.beans.testfixture.beans.TestBean.getAge())";
+
+       Pointcut pointcut = getPointcut(expression);
+       ClassFilter classFilter = pointcut.getClassFilter();
+       MethodMatcher methodMatcher = pointcut.getMethodMatcher();
+
+       assertMatchesTestBeanClass(classFilter);
+
+       assertThat(methodMatcher.isRuntime()).as("Should not be a runtime match").isFalse();
+       assertMatchesGetAge(methodMatcher);
+       assertThat(methodMatcher.matches(setAge, TestBean.class)).as("Expression should match setAge() method").isFalse();
+   }
+   ```
+
+2. **类型模式匹配测试**
+   ```java
+   @Test
+   void testMatchWithTypePattern() {
+       String expression = "execution(* *..TestBean.*Age(..))";
+
+       Pointcut pointcut = getPointcut(expression);
+       ClassFilter classFilter = pointcut.getClassFilter();
+       MethodMatcher methodMatcher = pointcut.getMethodMatcher();
+
+       assertMatchesTestBeanClass(classFilter);
+
+       assertThat(methodMatcher.isRuntime()).as("Should not be a runtime match").isFalse();
+       assertMatchesGetAge(methodMatcher);
+       assertThat(methodMatcher.matches(setAge, TestBean.class)).as("Expression should match setAge(int) method").isTrue();
+   }
+   ```
+
+3. **this和target测试**
+   ```java
+   @Test
+   void testThis() throws SecurityException, NoSuchMethodException{
+       testThisOrTarget("this");
+   }
+
+   @Test
+   void testTarget() throws SecurityException, NoSuchMethodException {
+       testThisOrTarget("target");
+   }
+
+   private void testThisOrTarget(String which) throws SecurityException, NoSuchMethodException {
+       String matchesTestBean = which + "(org.springframework.beans.testfixture.beans.TestBean)";
+       String matchesIOther = which + "(org.springframework.beans.testfixture.beans.IOther)";
+       AspectJExpressionPointcut testBeanPc = new AspectJExpressionPointcut();
+       testBeanPc.setExpression(matchesTestBean);
+
+       AspectJExpressionPointcut iOtherPc = new AspectJExpressionPointcut();
+       iOtherPc.setExpression(matchesIOther);
+
+       assertThat(testBeanPc.matches(TestBean.class)).isTrue();
+       assertThat(testBeanPc.matches(getAge, TestBean.class)).isTrue();
+       assertThat(iOtherPc.matches(OtherIOther.class.getMethod("absquatulate"), OtherIOther.class)).isTrue();
+       assertThat(testBeanPc.matches(OtherIOther.class.getMethod("absquatulate"), OtherIOther.class)).isFalse();
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `testMatchExplicit()` 测试，理解精确匹配机制
+2. 运行 `testMatchWithTypePattern()` 测试，理解模式匹配
+3. 运行 `testThis()` 和 `testTarget()` 测试，理解this和target表达式
+
+#### 关键源码位置
+- [AspectJExpressionPointcut.matches()](spring-aop/src/main/java/org/springframework/aop/aspectj/AspectJExpressionPointcut.java)
+- [AspectJExpressionPointcut.buildPointcutExpression()](spring-aop/src/main/java/org/springframework/aop/aspectj/AspectJExpressionPointcut.java)
+- [AspectJExpressionPointcut.buildPointcutExpression()](spring-aop/src/main/java/org/springframework/aop/aspectj/AspectJExpressionPointcut.java)
 
 ## 第四阶段：配置管理 (第7-8周)
 
 ### 4.1 注解配置解析
 
 #### 核心测试用例
-[ConfigurationClassTests.java](spring-context/src/test/java/org/springframework/context/annotation/ConfigurationClassTests.java)
+[ConfigurationClassPostProcessorTests.java](spring-context/src/test/java/org/springframework/context/annotation/ConfigurationClassPostProcessorTests.java)
 
 #### 重点测试方法
-1. **@Configuration处理测试**
+1. **配置类增强测试**
    ```java
    @Test
-   void testConfigurationClassProcessing() {
-       // 测试配置类处理
+   void enhancementIsPresentBecauseSingletonSemanticsAreRespected() {
+       beanFactory.registerBeanDefinition("config", new RootBeanDefinition(SingletonBeanConfig.class));
+       ConfigurationClassPostProcessor pp = new ConfigurationClassPostProcessor();
+       pp.postProcessBeanFactory(beanFactory);
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).hasBeanClass()).isTrue();
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).getBeanClass().getName()).contains(ClassUtils.CGLIB_CLASS_SEPARATOR);
+       Foo foo = beanFactory.getBean("foo", Foo.class);
+       Bar bar = beanFactory.getBean("bar", Bar.class);
+       assertThat(bar.foo).isSameAs(foo);
+       assertThat(beanFactory.getDependentBeans("foo")).contains("bar");
+       assertThat(beanFactory.getDependentBeans("config")).contains("foo");
+       assertThat(beanFactory.getDependentBeans("config")).contains("bar");
    }
    ```
 
-2. **@ComponentScan测试**
+2. **非增强配置类测试**
    ```java
    @Test
-   void testComponentScanning() {
-       // 测试组件扫描
+   void enhancementIsNotPresentForProxyBeanMethodsFlagSetToFalse() {
+       beanFactory.registerBeanDefinition("config", new RootBeanDefinition(NonEnhancedSingletonBeanConfig.class));
+       ConfigurationClassPostProcessor pp = new ConfigurationClassPostProcessor();
+       pp.postProcessBeanFactory(beanFactory);
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).hasBeanClass()).isTrue();
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).getBeanClass().getName()).doesNotContain(ClassUtils.CGLIB_CLASS_SEPARATOR);
+       Foo foo = beanFactory.getBean("foo", Foo.class);
+       Bar bar = beanFactory.getBean("bar", Bar.class);
+       assertThat(bar.foo).isNotSameAs(foo);
    }
    ```
+
+3. **静态方法配置测试**
+   ```java
+   @Test
+   void enhancementIsNotPresentForStaticMethods() {
+       beanFactory.registerBeanDefinition("config", new RootBeanDefinition(StaticSingletonBeanConfig.class));
+       ConfigurationClassPostProcessor pp = new ConfigurationClassPostProcessor();
+       pp.postProcessBeanFactory(beanFactory);
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).hasBeanClass()).isTrue();
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("config")).getBeanClass().getName()).doesNotContain(ClassUtils.CGLIB_CLASS_SEPARATOR);
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("foo")).hasBeanClass()).isTrue();
+       assertThat(((RootBeanDefinition) beanFactory.getBeanDefinition("bar")).hasBeanClass()).isTrue();
+       Foo foo = beanFactory.getBean("foo", Foo.class);
+       Bar bar = beanFactory.getBean("bar", Bar.class);
+       assertThat(bar.foo).isNotSameAs(foo);
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `enhancementIsPresentBecauseSingletonSemanticsAreRespected()` 测试，理解配置类增强机制
+2. 运行 `enhancementIsNotPresentForProxyBeanMethodsFlagSetToFalse()` 测试，理解非增强配置类
+3. 运行 `enhancementIsNotPresentForStaticMethods()` 测试，理解静态方法配置
+
+#### 关键源码位置
+- [ConfigurationClassPostProcessor.postProcessBeanFactory()](spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassPostProcessor.java)
+- [ConfigurationClassEnhancer.enhance()](spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassEnhancer.java)
+- [ConfigurationClassParser.parse()](spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassParser.java)
 
 ### 4.2 条件装配
 
 #### 核心测试用例
-[ConditionEvaluatorTests.java](spring-context/src/test/java/org/springframework/context/annotation/ConditionEvaluatorTests.java)
+[ConfigurationClassWithConditionTests.java](spring-context/src/test/java/org/springframework/context/annotation/ConfigurationClassWithConditionTests.java)
 
 #### 重点测试方法
-```java
-@Test
-void testConditionEvaluation() {
-    ConditionEvaluator evaluator = new ConditionEvaluator(registry, environment, resourceLoader);
-    
-    // 测试条件评估
-    boolean shouldSkip = evaluator.shouldSkip(configClass);
-    assertThat(shouldSkip).isFalse();
-}
-```
+1. **条件Bean匹配测试**
+   ```java
+   @Test
+   void conditionalOnMissingBeanMatch() {
+       AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+       ctx.register(BeanOneConfiguration.class, BeanTwoConfiguration.class);
+       ctx.refresh();
+       assertThat(ctx.containsBean("bean1")).isTrue();
+       assertThat(ctx.containsBean("bean2")).isFalse();
+       assertThat(ctx.containsBean("configurationClassWithConditionTests.BeanTwoConfiguration")).isFalse();
+   }
+   ```
+
+2. **条件Bean不匹配测试**
+   ```java
+   @Test
+   void conditionalOnMissingBeanNoMatch() {
+       AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+       ctx.register(BeanTwoConfiguration.class);
+       ctx.refresh();
+       assertThat(ctx.containsBean("bean1")).isFalse();
+       assertThat(ctx.containsBean("bean2")).isTrue();
+       assertThat(ctx.containsBean("configurationClassWithConditionTests.BeanTwoConfiguration")).isTrue();
+   }
+   ```
+
+3. **条件Bean存在匹配测试**
+   ```java
+   @Test
+   void conditionalOnBeanMatch() {
+       AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+       ctx.register(BeanOneConfiguration.class, BeanThreeConfiguration.class);
+       ctx.refresh();
+       assertThat(ctx.containsBean("bean1")).isTrue();
+       assertThat(ctx.containsBean("bean3")).isTrue();
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `conditionalOnMissingBeanMatch()` 测试，理解条件Bean匹配机制
+2. 运行 `conditionalOnMissingBeanNoMatch()` 测试，理解条件Bean不匹配情况
+3. 运行 `conditionalOnBeanMatch()` 测试，理解条件Bean存在匹配
+
+#### 关键源码位置
+- [ConditionEvaluator.shouldSkip()](spring-context/src/main/java/org/springframework/context/annotation/ConditionEvaluator.java)
+- [ConfigurationClassParser.processConfigurationClass()](spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassParser.java)
+- [Condition.matches()](spring-context/src/main/java/org/springframework/context/annotation/Condition.java)
 
 ## 第五阶段：Web框架 (第9-10周)
 
@@ -432,21 +850,67 @@ void testConditionEvaluation() {
 [RequestMappingHandlerMappingTests.java](spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMappingTests.java)
 
 #### 重点测试方法
-1. **请求映射测试**
+1. **请求映射构建器配置测试**
    ```java
    @Test
-   void testRequestMapping() {
-       // 测试@RequestMapping处理
+   void builderConfiguration() {
+       RequestMappingHandlerMapping mapping = createMapping();
+
+       RequestMappingInfo.BuilderConfiguration config = mapping.getBuilderConfiguration();
+       assertThat(config).isNotNull();
+
+       mapping.afterPropertiesSet();
    }
    ```
 
-2. **参数解析测试**
+2. **组合注解映射测试**
    ```java
-   @Test
-   void testParameterResolution() {
-       // 测试参数解析
+   @Test // SPR-14988
+   void postMappingOverridesConsumesFromTypeLevelAnnotation() {
+       RequestMappingInfo requestMappingInfo = assertComposedAnnotationMapping(RequestMethod.POST);
+
+       ConsumesRequestCondition condition = requestMappingInfo.getConsumesCondition();
+       assertThat(condition.getConsumableMediaTypes()).containsOnly(MediaType.APPLICATION_XML);
    }
    ```
+
+3. **HTTP方法映射测试**
+   ```java
+   @Test
+   void getMapping() {
+       assertComposedAnnotationMapping(RequestMethod.GET);
+   }
+
+   @Test
+   void postMapping() {
+       assertComposedAnnotationMapping(RequestMethod.POST);
+   }
+
+   @Test
+   void putMapping() {
+       assertComposedAnnotationMapping(RequestMethod.PUT);
+   }
+
+   @Test
+   void deleteMapping() {
+       assertComposedAnnotationMapping(RequestMethod.DELETE);
+   }
+
+   @Test
+   void patchMapping() {
+       assertComposedAnnotationMapping(RequestMethod.PATCH);
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `builderConfiguration()` 测试，理解请求映射构建器配置
+2. 运行 `postMappingOverridesConsumesFromTypeLevelAnnotation()` 测试，理解组合注解映射
+3. 运行各种HTTP方法映射测试，理解不同HTTP方法的处理
+
+#### 关键源码位置
+- [RequestMappingHandlerMapping.getMappingForMethod()](spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java)
+- [RequestMappingInfo.paths()](spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/RequestMappingInfo.java)
+- [RequestMappingHandlerAdapter.handleInternal()](spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerAdapter.java)
 
 ### 5.2 Spring WebFlux
 
@@ -454,16 +918,113 @@ void testConditionEvaluation() {
 [RouterFunctionTests.java](spring-webflux/src/test/java/org/springframework/web/reactive/function/server/RouterFunctionTests.java)
 
 #### 重点测试方法
-```java
-@Test
-void testRouterFunction() {
-    RouterFunction<ServerResponse> route = RouterFunctions
-        .route(RequestPredicates.GET("/test"), 
-               request -> ServerResponse.ok().bodyValue("test"));
-    
-    // 测试路由函数
-}
-```
+1. **路由函数组合测试**
+   ```java
+   @Test
+   void and() {
+       HandlerFunction<ServerResponse> handlerFunction = request -> ServerResponse.ok().build();
+       RouterFunction<ServerResponse> routerFunction1 = request -> Mono.empty();
+       RouterFunction<ServerResponse> routerFunction2 = request -> Mono.just(handlerFunction);
+
+       RouterFunction<ServerResponse> result = routerFunction1.and(routerFunction2);
+       assertThat(result).isNotNull();
+
+       MockServerHttpRequest mockRequest = MockServerHttpRequest.get("https://example.com").build();
+       ServerRequest request = new DefaultServerRequest(MockServerWebExchange.from(mockRequest), Collections.emptyList());
+       Mono<HandlerFunction<ServerResponse>> resultHandlerFunction = result.route(request);
+
+       StepVerifier.create(resultHandlerFunction)
+               .expectNext(handlerFunction)
+               .expectComplete()
+               .verify();
+   }
+   ```
+
+2. **路由函数过滤测试**
+   ```java
+   @Test
+   void filter() {
+       Mono<String> stringMono = Mono.just("42");
+       HandlerFunction<EntityResponse<Mono<String>>> handlerFunction =
+               request -> EntityResponse.fromPublisher(stringMono, String.class).build();
+       RouterFunction<EntityResponse<Mono<String>>> routerFunction =
+               request -> Mono.just(handlerFunction);
+
+       HandlerFilterFunction<EntityResponse<Mono<String>>, EntityResponse<Mono<Integer>>> filterFunction =
+               (request, next) -> next.handle(request).flatMap(
+                       response -> {
+                           Mono<Integer> intMono = response.entity()
+                                   .map(Integer::parseInt);
+                           return EntityResponse.fromPublisher(intMono, Integer.class).build();
+                       });
+
+       RouterFunction<EntityResponse<Mono<Integer>>> result = routerFunction.filter(filterFunction);
+       assertThat(result).isNotNull();
+
+       MockServerHttpRequest mockRequest = MockServerHttpRequest.get("https://example.com").build();
+       ServerRequest request = new DefaultServerRequest(MockServerWebExchange.from(mockRequest), Collections.emptyList());
+       Mono<EntityResponse<Mono<Integer>>> responseMono =
+               result.route(request).flatMap(hf -> hf.handle(request));
+
+       StepVerifier.create(responseMono)
+               .consumeNextWith(
+                       serverResponse ->
+                           StepVerifier.create(serverResponse.entity())
+                                   .expectNext(42)
+                                   .expectComplete()
+                                   .verify()
+                       )
+               .expectComplete()
+               .verify();
+   }
+   ```
+
+3. **路由函数属性测试**
+   ```java
+   @Test
+   void attributes() {
+       RouterFunction<ServerResponse> route = RouterFunctions.route(
+               GET("/atts/1"), request -> ServerResponse.ok().build())
+               .withAttribute("foo", "bar")
+               .withAttribute("baz", "qux")
+               .and(RouterFunctions.route(GET("/atts/2"), request -> ServerResponse.ok().build())
+               .withAttributes(atts -> {
+                   atts.put("foo", "bar");
+                   atts.put("baz", "qux");
+               }))
+               .and(RouterFunctions.nest(path("/atts"),
+                       RouterFunctions.route(GET("/3"), request -> ServerResponse.ok().build())
+                       .withAttribute("foo", "bar")
+                       .and(RouterFunctions.route(GET("/4"), request -> ServerResponse.ok().build())
+                       .withAttribute("baz", "qux"))
+                       .and(RouterFunctions.nest(path("/5"),
+                               RouterFunctions.route(method(GET), request -> ServerResponse.ok().build())
+                               .withAttribute("foo", "n3"))
+                       .withAttribute("foo", "n2")))
+               .withAttribute("foo", "n1"));
+
+       AttributesTestVisitor visitor = new AttributesTestVisitor();
+       route.accept(visitor);
+       assertThat(visitor.routerFunctionsAttributes()).containsExactly(
+               List.of(Map.of("foo", "bar", "baz", "qux")),
+               List.of(Map.of("foo", "bar", "baz", "qux")),
+               List.of(Map.of("foo", "bar"), Map.of("foo", "n1")),
+               List.of(Map.of("baz", "qux"), Map.of("foo", "n1")),
+               List.of(Map.of("foo", "n3"), Map.of("foo", "n2"), Map.of("foo", "n1"))
+       );
+       assertThat(visitor.visitCount()).isEqualTo(7);
+   }
+   ```
+
+#### 学习步骤
+1. 运行 `and()` 测试，理解路由函数组合机制
+2. 运行 `filter()` 测试，理解路由函数过滤机制
+3. 运行 `attributes()` 测试，理解路由函数属性机制
+
+#### 关键源码位置
+- [RouterFunction.route()](spring-webflux/src/main/java/org/springframework/web/reactive/function/server/RouterFunction.java)
+- [RouterFunctions.route()](spring-webflux/src/main/java/org/springframework/web/reactive/function/server/RouterFunctions.java)
+- [HandlerFunction.handle()](spring-webflux/src/main/java/org/springframework/web/reactive/function/server/HandlerFunction.java)
 
 ## 面试重点
 

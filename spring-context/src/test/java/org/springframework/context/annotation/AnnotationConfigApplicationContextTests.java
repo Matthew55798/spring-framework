@@ -16,13 +16,8 @@
 
 package org.springframework.context.annotation;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.regex.Pattern;
-
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
-
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.TypeReference;
@@ -41,6 +36,10 @@ import org.springframework.context.testfixture.context.annotation.LambdaBeanConf
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ObjectUtils;
 
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -56,8 +55,18 @@ class AnnotationConfigApplicationContextTests {
 	@Test
 	void scanAndRefresh() {
 		AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+		//加载资源，组装BeanDefinition
+		//将 BeanDefinition 保存注册到相应的 BeanDefinitionRegistry 中
+		//Bean定义注册: 将扫描到的类注册为BeanDefinition
 		context.scan("org.springframework.context.annotation6");
+
+		//刷新容器
+		//Bean后处理器注册: 注册各种BeanPostProcessor
+		//Bean实例化: 创建Bean实例
+		//依赖注入: 注入Bean依赖
+		//初始化: 执行@PostConstruct等方法
 		context.refresh();
+		//至此IOC容器初始化完成
 
 		context.getBean(uncapitalize(ConfigForScanning.class.getSimpleName()));
 		context.getBean("testBean"); // contributed by ConfigForScanning
